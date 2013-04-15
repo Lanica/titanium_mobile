@@ -37,6 +37,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Message;
 import android.view.View;
+import android.view.ViewGroup;
 
 /**
  * The parent class of view proxies.
@@ -81,6 +82,7 @@ public abstract class TiViewProxy extends KrollProxy implements Handler.Callback
 	private static final int MSG_GETRECT = MSG_FIRST_ID + 111;
 	private static final int MSG_FINISH_LAYOUT = MSG_FIRST_ID + 112;
 	private static final int MSG_UPDATE_LAYOUT = MSG_FIRST_ID + 113;
+	private static final int MSG_TRANSFER_VIEW = MSG_FIRST_ID + 114;
 
 	protected static final int MSG_LAST_ID = MSG_FIRST_ID + 999;
 
@@ -204,6 +206,10 @@ public abstract class TiViewProxy extends KrollProxy implements Handler.Callback
 	public boolean handleMessage(Message msg)
 	{
 		switch(msg.what) {
+			case MSG_TRANSFER_VIEW:{
+				handleTransfer((TiViewProxy) msg.obj);
+				return true;
+			}
 			case MSG_GETVIEW : {
 				AsyncResult result = (AsyncResult) msg.obj;
 				result.setResult(handleGetView());
@@ -344,6 +350,13 @@ public abstract class TiViewProxy extends KrollProxy implements Handler.Callback
 
 		return KrollRuntime.UNDEFINED;
 	}
+	
+	@Kroll.method
+	public void transferChild(TiViewProxy newProxy)
+	{
+		getMainHandler().obtainMessage(MSG_TRANSFER_VIEW, newProxy).sendToTarget();
+	}
+
 
 	@Kroll.setProperty(retain=false) @Kroll.method
 	public void setWidth(Object width)
@@ -556,6 +569,12 @@ public abstract class TiViewProxy extends KrollProxy implements Handler.Callback
 		}
 		//TODO zOrder
 	}
+	
+	private void handleTransfer(TiViewProxy newProxy){
+		TiViewProxy oldParent = newProxy.getParent();
+		oldParent.handleRemoveNotDestructive(newProxy);
+		add(newProxy);
+	}
 
 	public void handleAdd(TiViewProxy child)
 	{
@@ -571,6 +590,8 @@ public abstract class TiViewProxy extends KrollProxy implements Handler.Callback
 			view.add(cv);
 		}
 	}
+	
+	
 
 	/**
 	 * Removes a view from this view proxy, releasing the underlying native view if it exists.
@@ -621,6 +642,16 @@ public abstract class TiViewProxy extends KrollProxy implements Handler.Callback
 		}
 	}
 
+	public void handleRemoveNotDestructive(TiViewProxy child)
+	{
+		if (children != null) {
+			children.remove(child);
+			if (view != null) {
+				view.remove(child.peekView());
+			}
+		}
+	}
+	
 	public void handleRemove(TiViewProxy child)
 	{
 		if (children != null) {
